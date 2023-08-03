@@ -1,0 +1,39 @@
+library(readr)
+library(stringr)# for padding strings
+library(dplyr)# for group by
+library(ggplot2) # for plotting
+X2006 <- read_csv("2006.csv")
+X2007 <- read_csv("2007.csv")
+airports <- read_csv("airports.csv")
+# Combine two data frames
+data <- rbind(X2006, X2007)
+# Check missing values
+summary(data)
+# Merge and get the city name
+newdata = merge(x = data, y = airports[c('iata','city')], by.x = 'Origin', by.y = 'iata' , type='left')
+newdata <- newdata %>% rename(Origin_city = city)
+newdata = merge(x = newdata, y = airports[c('iata','city')], by.x = 'Dest', by.y = 'iata' , type='left')
+newdata <- newdata %>% rename(Dest_city = city)
+head(newdata, 5)
+# Creating new Location variable
+newdata$location = paste(newdata$Origin_city, newdata$Dest_city)
+head(newdata, 5)
+# get only the most common locations for plotting purposes
+locationslist <- c('Boston New York','New York Boston','Chicago New York',
+                   'New York Chicago','Kahului Honolulu','Honolulu Kahului',
+                   'New York Arlington','Arlington New York','Houston Dallas','Dallas Houston')
+head(newdata, 5)
+newdata %>% count(location)
+filtered_data <- newdata[newdata$location %in% locationslist ,]
+locationwisedata = filtered_data %>% group_by(Year,location) %>% summarise(numberofflights=n(), .groups='drop')
+locationwisedata$Year <- as.character(locationwisedata$Year)
+p<-ggplot(locationwisedata, aes(x=location, y=numberofflights, fill=Year)) +
+  geom_bar(stat="identity", position=position_dodge())+theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+p
+# Month and year wise plotting
+filtered_data$MonthAndYear <- sprintf("(%d-%d)", filtered_data$Year, filtered_data$Month)
+locationwisedata1 = filtered_data %>% group_by(MonthAndYear,location) %>% summarise(numberofflights=n(), .groups='drop')
+locationwisedata1$MonthAndYear <- as.character(locationwisedata1$MonthAndYear)
+p<-ggplot(locationwisedata1, aes(x=location, y=numberofflights, fill=MonthAndYear)) +
+  geom_bar(stat="identity", position=position_dodge())+theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+p

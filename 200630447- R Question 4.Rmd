@@ -1,0 +1,42 @@
+library(readr)
+library(stringr)# for padding strings
+library(dplyr)# for group by
+library(ggplot2) # for plotting
+library(data.table)
+library(lubridate)
+library(crosstable)
+library(tidyr)
+X2006 <- read_csv("2006.csv")
+X2007 <- read_csv("2007.csv")
+airports <- read_csv("airports.csv")
+# Combine two data frames
+data <- rbind(X2006, X2007)
+# data <- head(data, 10)
+
+data <- data %>% filter(TailNum  %in% c('N657AW', 'N312AW'))
+# Create a date and time feature
+data$CRSDepTime <- str_pad(data$CRSDepTime,4,'0',side='left')
+data$crsHours <- substring(data$CRSDepTime, 0, 2)
+data$crsMinutes <- substring(data$CRSDepTime, 3, 4)
+data %>% count(crsHours)
+data$DateTimeCRSDepTime <- with(data, ymd_hms(paste(Year, Month, DayofMonth, crsHours, crsMinutes, 0, sep= ' ')))
+
+# all delay variable creation
+data$alldelay = data$ArrDelay+data$DepDelay
+
+# get the last flight delay
+data <- data %>% arrange(TailNum, DateTimeCRSDepTime)
+data$PrevDelay <- c(NA, data$alldelay[-nrow(data)])
+data$PrevDelay[which(!duplicated(data$TailNum))] <- NA
+
+# Scatter plot
+p <- ggplot(data, aes(x=alldelay, y=PrevDelay)) + geom_point()+ theme_minimal()
+p  
+
+# group by values
+data$HasCurrentDelay <- ifelse(data$alldelay>0,1,0)
+data$HasPrevDelay <- ifelse(data$PrevDelay>0,1,0)
+data %>%
+  group_by(HasCurrentDelay, HasPrevDelay) %>%
+  tally() %>%
+  spread(HasCurrentDelay, n)

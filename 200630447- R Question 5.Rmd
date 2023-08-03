@@ -1,0 +1,86 @@
+library(readr)
+library(stringr)# for padding strings
+library(dplyr)# for group by
+library(ggplot2) # for plotting
+library(data.table)
+library(lubridate)
+library(crosstable)
+library(tidyr)
+library(PerformanceAnalytics)
+library(GGally)
+library(superml)
+library(party)
+library(caret)
+library(rpart)
+library(ROCR)
+library(rpart.plot)
+library(randomForest)
+library(pROC)
+
+# Load data and combine
+X2006 <- read_csv("C:/Users/ASUS/Jupyter Notebook work/2006.csv")
+X2007 <- read_csv("C:/Users/ASUS/Jupyter Notebook work/2007.csv")
+# Combine two data frames
+data <- rbind(X2006, X2007)
+data <- sample_n(data, 200000)
+data$ArrDelay <- ifelse(is.na(data$ArrDelay),0,data$ArrDelay)
+data$DepDelay <- ifelse(is.na(data$DepDelay),0,data$DepDelay)
+data$alldelay = data$ArrDelay+data$DepDelay
+data$isDelay <- ifelse(data$alldelay>0,1,0)
+notcancelled_data = data[data$Cancelled==0 & data$Diverted==0,]
+notcancelled_data$CancellationCode <- NULL
+notcancelled_data$alldelay <- NULL
+notcancelled_data$LateAircraftDelay <- NULL
+notcancelled_data$SecurityDelay <- NULL
+notcancelled_data$NASDelay <- NULL
+#taking depdelay and arrdelay off because we use them as alldelay
+notcancelled_data$DepDelay <- NULL
+notcancelled_data$ArrDelay <- NULL
+notcancelled_data$WeatherDelay <- NULL
+notcancelled_data$CarrierDelay <- NULL
+notcancelled_data$Diverted <- NULL
+notcancelled_data$Cancelled <- NULL
+# explore data
+str(notcancelled_data)
+# encoding
+label <- LabelEncoder$new()
+notcancelled_data$uc <- label$fit_transform(notcancelled_data$UniqueCarrier)
+notcancelled_data$tn<- label$fit_transform(notcancelled_data$TailNum)
+notcancelled_data$og<- label$fit_transform(notcancelled_data$Origin)
+notcancelled_data$ds<- label$fit_transform(notcancelled_data$Dest)
+notcancelled_data$UniqueCarrier <- NULL
+notcancelled_data$TailNum <- NULL
+notcancelled_data$Origin <- NULL
+notcancelled_data$Dest <- NULL
+# explore data
+str(notcancelled_data)
+# Correlation Check
+#chart.Correlation(notcancelled_data,histogram=FALSE, col="grey10", pch=1)
+ggcorr(notcancelled_data, name = "corr", label = TRUE)+
+  theme(legend.position="none")+
+  labs(title="Corelations")+
+  theme(plot.title=element_text(face='bold',color='black',hjust=0.5,size=12))
+
+
+notcancelled_data$isDelay <- as.factor(notcancelled_data$isDelay )
+
+#Splitting training set into two parts based on outcome: 70% and 30% 
+index <- createDataPartition(notcancelled_data$isDelay, p=0.70, list=FALSE) 
+trainSet <- notcancelled_data[ index,] 
+testSet <- notcancelled_data[-index,]
+# Factoring the target variable
+trainSet$isDelay <- as.factor(trainSet$isDelay )
+testSet$isDelay <- as.factor(testSet$isDelay )
+# removing target variable 
+outcomeName<-'isDelay' 
+predictors<-names(trainSet)[!names(trainSet) %in% outcomeName]
+# Train the model
+model_rf <- train(isDelay ~ ., data=trainSet,method='rf') 
+# get the prediction
+predictions<-predict.train(object=model_rf,testSet[,predictors],type="raw") 
+table(predictions)
+# Print the confusion matrix
+confusionMatrix(predictions, as.factor(testSet$isDelay))
+# ROC Curve
+rf.model <- randomForest(isDelay ~ ., data=trainSet)
+roc(trainSet$isDelay, rf.model$votes[,1], percent=TRUE, print.auc=TRUE, plot=TRUE)

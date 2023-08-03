@@ -1,0 +1,39 @@
+library(readr)
+library(stringr)# for padding strings
+library(dplyr)# for group by
+library(ggplot2) # for plottings
+X2007 <- read_csv("C:/Users/ASUS/Jupyter Notebook work/2007.csv")
+X2006 <- read_csv("C:/Users/ASUS/Jupyter Notebook work/2006.csv")
+# Combine two data frames
+data <- rbind(X2006, X2007)
+# Check missing values
+summary(data)
+# get only not canceled planes
+notcancelled_data = data[data$Cancelled==0 & data$Diverted==0,]
+summary(notcancelled_data)
+# left pad and extract departure hours and minutes
+notcancelled_data$DepTime1 <- str_pad(notcancelled_data$DepTime,4,'0',side='left')
+notcancelled_data$depHours <- substring(notcancelled_data$DepTime1, 0, 2)
+notcancelled_data$depMinutes <- substring(notcancelled_data$DepTime1, 3, 4)
+# Checking delays
+checkingdelays = notcancelled_data %>% group_by(Year,Month,DayofMonth,DayOfWeek,depHours,depMinutes) %>% summarise(ArrivalDelay = sum(ArrDelay),DepartureDelay = sum(DepDelay), .groups = 'drop')
+checkingdelays$alldelay = checkingdelays$ArrivalDelay+checkingdelays$DepartureDelay
+checkingdelays$delayornot = ifelse(checkingdelays$alldelay>1,'Delayed','Not Delayed')
+summary(checkingdelays)
+checkingdelays$depHours = ifelse(checkingdelays$depHours>'23',"00",checkingdelays$depHours)
+# plotting for departure hours
+plot_df = checkingdelays %>% group_by(delayornot,depHours) %>% summarise(count_records=n(), .groups='drop')
+p<-ggplot(plot_df, aes(x=depHours, y=count_records, fill=delayornot)) +
+  geom_bar(stat="identity", position=position_dodge())+theme_minimal()
+p
+# plotting for day of week
+plot_df_1 = checkingdelays %>% group_by(delayornot,DayOfWeek) %>% summarise(count_records=n(), .groups='drop')
+p<-ggplot(plot_df_1, aes(x=DayOfWeek, y=count_records, fill=delayornot)) +
+  geom_bar(stat="identity", position=position_dodge())+theme_minimal()
+p
+# plotting for month and year wise
+checkingdelays$MonthAndYear <- sprintf("(%d-%d)", checkingdelays$Year, checkingdelays$Month)
+plot_df_2 = checkingdelays %>% group_by(delayornot,MonthAndYear) %>% summarise(count_records=n(), .groups='drop')
+p<-ggplot(plot_df_2, aes(x=MonthAndYear, y=count_records, fill=delayornot)) +
+  geom_bar(stat="identity", position=position_dodge())+theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+p
